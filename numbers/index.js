@@ -1,48 +1,45 @@
 const express = require('express');
 const axios = require('axios');
-const axiosTimeout = require('axios-timeout-extended');
-
 const app = express();
-const PORT = 3000;
+const port = 3000;
 
-// Function to merge unique integers from multiple arrays
-function mergeUniqueArrays(arrays) {
-  const merged = [].concat(...arrays);
-  return Array.from(new Set(merged)).sort((a, b) => a - b);
-}
-
-// Function to fetch data from a given URL
-async function fetchData(url) {
+// Helper function to fetch numbers from a URL
+async function fetchNumbersFromUrl(url) {
   try {
-    const response = await axiosTimeout.get(url, { timeout: 500 });
-    return response.data.numbers || [];
+    const response = await axios.get(url, { timeout: 500 });
+    if (response.status === 200) {
+      const data = response.data;
+      if (data.numbers && Array.isArray(data.numbers)) {
+        return data.numbers;
+      }
+    }
   } catch (error) {
-    console.error(`Error fetching data from ${url}:`, error.message);
-    return [];
+    // Ignore errors, including timeouts
   }
+  return [];
 }
 
-// API endpoint to retrieve numbers from multiple URLs
 app.get('/numbers', async (req, res) => {
-  const { url } = req.query;
+  const urls = req.query.url;
 
-  if (!url) {
-    return res.status(400).json({ error: 'No URLs provided' });
+  if (!urls || !Array.isArray(urls)) {
+    return res.status(400).json({ error: 'Invalid query parameter: url' });
   }
 
-  const urls = Array.isArray(url) ? url : [url];
-  const fetchDataPromises = urls.map((url) => fetchData(url));
-
   try {
-    const results = await Promise.all(fetchDataPromises);
-    const mergedNumbers = mergeUniqueArrays(results);
+    const promises = urls.map(fetchNumbersFromUrl);
+    const results = await Promise.all(promises);
+
+    // Merge and sort unique numbers from all responses
+    const mergedNumbers = Array.from(new Set(results.flat())).sort((a, b) => a - b);
+
     return res.json({ numbers: mergedNumbers });
   } catch (error) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`number-management-service is running on http://localhost:${port}`);
 });
+
